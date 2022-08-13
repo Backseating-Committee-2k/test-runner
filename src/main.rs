@@ -51,9 +51,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut tests_failed: usize = 0;
     for source_file in globwalk::glob("test*.bs")? {
         let source_file = source_file?;
+        std::fs::rename(
+            "std",
+            source_file
+                .path()
+                .parent()
+                .unwrap_or(&PathBuf::from("."))
+                .join("std"),
+        )?;
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
             .output()?;
+        std::fs::rename(source_file.path().parent().unwrap().join("std"), "std")?;
         match command_result.status.success() {
             true => {
                 let compiler_output = command_result.stdout;
