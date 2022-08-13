@@ -66,21 +66,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         match command_result.status.success() {
             true => {
                 let compiler_output = command_result.stdout;
-                let command_result = child_with_pipe(&cli.upholsterer_path, compiler_output)?;
-                match command_result.status.success() {
+                let upholsterer_result = child_with_pipe(&cli.upholsterer_path, compiler_output)?;
+                match upholsterer_result.status.success() {
                     true => {
-                        let command_result = child_with_pipe_args(
+                        let backseater_result = child_with_pipe_args(
                             &cli.backseater_path,
-                            command_result.stdout,
+                            upholsterer_result.stdout,
                             ["run"],
                         )?;
-                        match command_result.status.success() {
+                        match backseater_result.status.success() {
                             true => eprintln!("TEST SUCCEEDED: {}", source_file.path().display()),
-                            false => print_error(&source_file, command_result),
+                            false => {
+                                tests_failed += 1;
+                                print_error(&source_file, backseater_result);
+                            }
                         }
                     }
                     false => {
-                        print_error(&source_file, command_result);
+                        print_error(&source_file, upholsterer_result);
                         tests_failed += 1;
                     }
                 }
