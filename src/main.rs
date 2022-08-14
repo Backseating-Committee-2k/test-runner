@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let backseater_result = child_with_pipe_args(
                             &cli.backseater_path,
                             upholsterer_result.stdout,
-                            ["run"],
+                            ["run", "--exit-on-halt"],
                         )?;
                         match backseater_result.status.success() {
                             true => eprintln!("TEST SUCCEEDED: {}", source_file.path().display()),
