@@ -1,7 +1,7 @@
 name: Rust
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
   push:
     branches: [ "main" ]
   pull_request:
@@ -9,15 +9,74 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CXX: g++-12
+  CC: gcc-12
 
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout repository of Backseat-Safe-System-2k emulator
+      uses: actions/checkout@v3
+      with:
+        # Repository name with owner. For example, actions/checkout
+        repository: Backseating-Committee-2k/BackseatSafeSystem2k
+
+    - name: Generate opcodes
+      run: cargo run --no-default-features -- json > ../opcodes.json
+
+    - name: Change back to root dir
+      run: cd ..
+
+    - name: Install GCC12
+      shell: bash
+      run: |
+        sudo apt update
+        sudo apt install gcc-12 g++-12
+
+    - name: Checkout repository of Upholsterer2k bssembler
+      uses: actions/checkout@v3
+      with:
+        # Repository name with owner. For example, actions/checkout
+        repository: Backseating-Committee-2k/Upholsterer2k
+
+    - name: Run Python scripts
+      run: |
+        python3 ./tools/opcodes2c.py ../opcodes.json ./opcodes.c
+        python3 ./tools/json2constants.py ../opcodes.json ./constants.c
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
     - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Change back to root dir
+      run: cd ..
+
+    - name: Checkout repository of Seatbelt compiler
+      uses: actions/checkout@v3
+      with:
+        # Repository name with owner. For example, actions/checkout
+        repository: Backseating-Committee-2k/Seatbelt
+
+    - name: Configure CMake
+      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
+      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+
+    - name: Build
+      # Build your program with the given configuration
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}
+
+    - name: Change back to root dir
+      run: cd ..
+
+    - uses: actions/checkout@v3
+
+    - name: Build
+      run: cargo run -- --seatbelt-path ../Seatbelt/bin/Seatbelt --upholsterer-path ../Upholsterer2k/bin/Upholsterer2k --backseater-path ../backseat_safe_system_2k/bin/backseat_safe_system_2k.exe
