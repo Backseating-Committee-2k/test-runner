@@ -80,4 +80,4 @@ jobs:
     - uses: actions/checkout@v3
 
     - name: Build
-      run: cargo run -- --seatbelt-path ../Seatbelt/bin/Seatbelt --upholsterer-path ../Upholsterer2k/bin/Upholsterer2k --backseater-path ../backseat_safe_system_2k/bin/backseat_safe_system_2k.exe
+      run: cargo run -- --seatbelt-path ../Seatbelt/bin/Seatbelt --upholsterer-path ../Upholsterer2k/bin/Upholsterer2k --backseater-path ../backseat_safe_system_2k/bin/backseat_safe_system_2k
