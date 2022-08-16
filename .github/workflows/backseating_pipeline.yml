@@ -30,7 +30,7 @@ jobs:
 
     - name: Move backseater binary
       shell: bash
-      run: mv ./target/debug/backseat-safe-system-2k ..
+      run: mv ./target/debug/backseat_safe_system_2k ..
 
     - name: Change back to root dir
       run: cd ..
