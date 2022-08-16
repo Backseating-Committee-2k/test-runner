@@ -1,4 +1,4 @@
-name: Rust
+name: Backseating-Pipeline
 
 on:
   workflow_dispatch:
