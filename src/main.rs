@@ -210,6 +210,7 @@ fn child_with_pipe(
     let child = Command::new(path_of_executable.as_os_str())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()?;
     spawn_child(child, compiler_output)
 }
@@ -226,6 +227,7 @@ where
     let child = Command::new(path_of_executable.as_os_str())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .args(args)
         .spawn()?;
     spawn_child(child, compiler_output)
