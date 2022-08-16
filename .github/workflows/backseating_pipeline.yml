@@ -28,6 +28,10 @@ jobs:
     - name: Generate opcodes
       run: cargo run --no-default-features -- json > ../opcodes.json
 
+    - name: Move backseater binary
+      shell: bash
+      run: mv ./target/debug/backseat-safe-system-2k ..
+
     - name: Change back to root dir
       run: cd ..
 
@@ -60,6 +64,10 @@ jobs:
       # Build your program with the given configuration
       run: cmake --build ./build --config ${{env.BUILD_TYPE}}
 
+    - name: Move Upholsterer2k binary
+      shell: bash
+      run: mv ./build/Upholsterer2k ..
+
     - name: Change back to root dir
       run: cd ..
 
@@ -78,6 +86,10 @@ jobs:
       # Build your program with the given configuration
       run: cmake --build ./build --config ${{env.BUILD_TYPE}}
 
+    - name: Move Seatbelt binary
+      shell: bash
+      run: mv ./build/Seatbelt ..
+
     - name: Change back to root dir
       run: cd ..
 
@@ -88,4 +100,4 @@ jobs:
       run: tree ../
 
     - name: Build
-      run: cargo run -- --seatbelt-path ../Seatbelt/bin/Seatbelt --upholsterer-path ../Upholsterer2k/bin/Upholsterer2k --backseater-path ../backseat_safe_system_2k/bin/backseat_safe_system_2k
+      run: cargo run -- --seatbelt-path ../Seatbelt --upholsterer-path ../Upholsterer2k --backseater-path ../backseat_safe_system_2k
