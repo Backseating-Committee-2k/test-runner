@@ -37,6 +37,10 @@ jobs:
         sudo apt update
         sudo apt install gcc-12 g++-12
 
+    - name: Install tree
+      shell: bash
+      run: sudo apt install tree
+
     - name: Checkout repository of Upholsterer2k bssembler
       uses: actions/checkout@v3
       with:
@@ -78,6 +82,10 @@ jobs:
       run: cd ..
 
     - uses: actions/checkout@v3
+
+    - name: Show file system
+      shell: bash
+      run: tree ../
 
     - name: Build
       run: cargo run -- --seatbelt-path ../Seatbelt/bin/Seatbelt --upholsterer-path ../Upholsterer2k/bin/Upholsterer2k --backseater-path ../backseat_safe_system_2k/bin/backseat_safe_system_2k
