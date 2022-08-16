@@ -1,10 +1,12 @@
 use std::error::Error;
 use std::ffi::OsStr;
-use std::io::Write;
+use std::io::{stdout, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use clap::Parser;
+use crossterm::execute;
+use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
 use globwalk::DirEntry;
 
 #[derive(Parser)]
@@ -90,12 +92,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                         match backseater_result.status.success() {
                             true => {
                                 if let TestOutcome::Aborted { error_message } = expected_outcome {
-                                    eprintln!("TEST FAILED: {}", source_file.path().display());
-                                    eprintln!("\ttest execution finished, but error message \"{}\" was expected",
+                                    print_fail(source_file.path());
+                                    println!("\ttest execution finished, but error message \"{}\" was expected",
                                 error_message);
                                     tests_failed += 1;
                                 } else {
-                                    eprintln!("TEST SUCCEEDED: {}", source_file.path().display());
+                                    print_success(source_file.path());
                                 }
                             }
                             false => {
@@ -144,18 +146,51 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         tests_run += 1;
     }
-    println!(
-        "Tests run: {}, Tests successful: {}, Tests failed: {}",
+    let message = format!(
+        "Tests run: {}, Tests successful: {}, Tests failed: {}\n",
         tests_run,
         tests_run - tests_failed,
         tests_failed
     );
+    execute!(
+        stdout(),
+        SetForegroundColor(if tests_failed == 0 {
+            Color::DarkGreen
+        } else {
+            Color::DarkRed
+        }),
+        Print(message),
+        ResetColor
+    )
+    .expect("unable to print output");
     std::fs::remove_dir_all("std")?;
     if tests_failed == 0 {
         Ok(())
     } else {
         Err("not all tests succeeded".into())
     }
+}
+
+fn print_success(source_file: &Path) {
+    execute!(
+        stdout(),
+        SetForegroundColor(Color::DarkGreen),
+        Print("TEST SUCCEEDED: "),
+        ResetColor
+    )
+    .expect("unable to print output");
+    println!("{}", source_file.display());
+}
+
+fn print_fail(source_file: &Path) {
+    execute!(
+        stdout(),
+        SetForegroundColor(Color::DarkRed),
+        Print("TEST FAILED: "),
+        ResetColor
+    )
+    .expect("unable to print output");
+    println!("{}", source_file.display());
 }
 
 fn validate_error_message(
@@ -166,12 +201,12 @@ fn validate_error_message(
 ) {
     let stderr_string = String::from_utf8_lossy(&command_result.stderr);
     if stderr_string.contains(&error_message) {
-        eprintln!("TEST SUCCEEDED: {}", source_file.display());
+        print_success(source_file);
     } else {
-        eprintln!("TEST FAILED: {}", source_file.display());
-        eprintln!("\ttest aborted as expected, but with wrong error message:");
-        eprintln!("\texpected: \"{}\"", error_message);
-        eprintln!("\t     got: \"{}\"", stderr_string.trim());
+        print_fail(source_file);
+        println!("\ttest aborted as expected, but with wrong error message:");
+        println!("\texpected: \"{}\"", error_message);
+        println!("\t     got: \"{}\"", stderr_string.trim());
         *tests_failed += 1;
     }
 }
@@ -247,8 +282,8 @@ fn spawn_child(
 }
 
 fn print_error(source_file: &DirEntry, command_result: std::process::Output) {
-    eprintln!("TEST FAILED: {}", source_file.path().display());
+    print_fail(source_file.path());
     let error_message = String::from_utf8_lossy(&command_result.stderr);
     let error_message = error_message.replace('\n', "\n\t");
-    eprintln!("\t{error_message}");
+    println!("\t{error_message}");
 }
