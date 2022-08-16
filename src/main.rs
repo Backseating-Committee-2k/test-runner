@@ -28,6 +28,12 @@ struct Cli {
     tests_path: PathBuf,
 }
 
+#[derive(Debug, PartialEq)]
+enum TestOutcome {
+    Finished,
+    Aborted { error_message: String },
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
@@ -59,6 +65,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .unwrap_or(&PathBuf::from("."))
                 .join("std"),
         )?;
+        let expected_outcome = determine_expected_outcome(source_file.path());
+        if let Err(error) = expected_outcome {
+            std::fs::remove_dir_all("std").ok();
+            return Err(error);
+        }
+        let expected_outcome = expected_outcome.unwrap();
+
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
             .output()?;
@@ -75,22 +88,58 @@ fn main() -> Result<(), Box<dyn Error>> {
                             ["run", "--exit-on-halt"],
                         )?;
                         match backseater_result.status.success() {
-                            true => eprintln!("TEST SUCCEEDED: {}", source_file.path().display()),
+                            true => {
+                                if let TestOutcome::Aborted { error_message } = expected_outcome {
+                                    eprintln!("TEST FAILED: {}", source_file.path().display());
+                                    eprintln!("\ttest execution finished, but error message \"{}\" was expected",
+                                error_message);
+                                    tests_failed += 1;
+                                } else {
+                                    eprintln!("TEST SUCCEEDED: {}", source_file.path().display());
+                                }
+                            }
                             false => {
-                                tests_failed += 1;
-                                print_error(&source_file, backseater_result);
+                                if let TestOutcome::Aborted { error_message } = expected_outcome {
+                                    validate_error_message(
+                                        &backseater_result,
+                                        error_message,
+                                        source_file.path(),
+                                        &mut tests_failed,
+                                    );
+                                } else {
+                                    tests_failed += 1;
+                                    print_error(&source_file, backseater_result);
+                                }
                             }
                         }
                     }
                     false => {
-                        print_error(&source_file, upholsterer_result);
-                        tests_failed += 1;
+                        if let TestOutcome::Aborted { error_message } = expected_outcome {
+                            validate_error_message(
+                                &upholsterer_result,
+                                error_message,
+                                source_file.path(),
+                                &mut tests_failed,
+                            );
+                        } else {
+                            print_error(&source_file, upholsterer_result);
+                            tests_failed += 1;
+                        }
                     }
                 }
             }
             false => {
-                print_error(&source_file, command_result);
-                tests_failed += 1;
+                if let TestOutcome::Aborted { error_message } = expected_outcome {
+                    validate_error_message(
+                        &command_result,
+                        error_message,
+                        source_file.path(),
+                        &mut tests_failed,
+                    );
+                } else {
+                    print_error(&source_file, command_result);
+                    tests_failed += 1;
+                }
             }
         }
         tests_run += 1;
@@ -107,6 +156,51 @@ fn main() -> Result<(), Box<dyn Error>> {
     } else {
         Err("not all tests succeeded".into())
     }
+}
+
+fn validate_error_message(
+    command_result: &std::process::Output,
+    error_message: String,
+    source_file: &Path,
+    tests_failed: &mut usize,
+) {
+    let stderr_string = String::from_utf8_lossy(&command_result.stderr);
+    if stderr_string.contains(&error_message) {
+        eprintln!("TEST SUCCEEDED: {}", source_file.display());
+    } else {
+        eprintln!("TEST FAILED: {}", source_file.display());
+        eprintln!("\ttest aborted as expected, but with wrong error message:");
+        eprintln!("\texpected: \"{}\"", error_message);
+        eprintln!("\t     got: \"{}\"", stderr_string.trim());
+        *tests_failed += 1;
+    }
+}
+
+fn determine_expected_outcome(source_file: &Path) -> Result<TestOutcome, Box<dyn Error>> {
+    let input_file = std::fs::read_to_string(source_file.as_os_str())?;
+    let first_line = input_file.split('\n').next().unwrap().trim();
+    if first_line.starts_with("//") {
+        let test_runner_command = first_line.strip_prefix("//").unwrap().trim();
+        let mut parts = test_runner_command.split('=');
+        if let Some(lhs) = parts.next() {
+            if let Some(rhs) = parts.next() {
+                if lhs.trim() == "fails_with" {
+                    let rhs = rhs.trim();
+                    let rhs = rhs
+                        .strip_prefix('"')
+                        .ok_or_else(|| format!("\" prefix not found in {}", source_file.display()))?
+                        .strip_suffix('"')
+                        .ok_or_else(|| {
+                            format!("\" suffix not found in {}", source_file.display())
+                        })?;
+                    return Ok(TestOutcome::Aborted {
+                        error_message: String::from(rhs),
+                    });
+                }
+            }
+        }
+    }
+    Ok(TestOutcome::Finished)
 }
 
 fn child_with_pipe(
