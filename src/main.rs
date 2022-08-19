@@ -33,7 +33,7 @@ struct Cli {
 #[derive(Debug, PartialEq)]
 enum TestOutcome {
     Finished,
-    Aborted { error_message: String },
+    Aborted { error_messages: Vec<String> },
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -92,20 +92,24 @@ fn main() -> Result<(), Box<dyn Error>> {
                         )?;
                         match backseater_result.status.success() {
                             true => {
-                                if let TestOutcome::Aborted { error_message } = expected_outcome {
+                                if let TestOutcome::Aborted { error_messages } = expected_outcome {
                                     print_fail(source_file.path());
-                                    println!("\ttest execution finished, but error message \"{}\" was expected",
-                                error_message);
+                                    println!("\ttest execution finished, but the following error messages were expected:");
+                                    for message in error_messages {
+                                        println!("\t\t\"{}\"", message);
+                                    }
                                     tests_failed += 1;
                                 } else {
                                     print_success(source_file.path());
                                 }
                             }
                             false => {
-                                if let TestOutcome::Aborted { error_message } = expected_outcome {
-                                    validate_error_message(
+                                if let TestOutcome::Aborted { ref error_messages } =
+                                    expected_outcome
+                                {
+                                    validate_error_messages(
                                         &backseater_result,
-                                        error_message,
+                                        error_messages,
                                         source_file.path(),
                                         &mut tests_failed,
                                     );
@@ -117,10 +121,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     }
                     false => {
-                        if let TestOutcome::Aborted { error_message } = expected_outcome {
-                            validate_error_message(
+                        if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
+                            validate_error_messages(
                                 &upholsterer_result,
-                                error_message,
+                                error_messages,
                                 source_file.path(),
                                 &mut tests_failed,
                             );
@@ -132,10 +136,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 }
             }
             false => {
-                if let TestOutcome::Aborted { error_message } = expected_outcome {
-                    validate_error_message(
+                if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
+                    validate_error_messages(
                         &command_result,
-                        error_message,
+                        error_messages,
                         source_file.path(),
                         &mut tests_failed,
                     );
@@ -194,19 +198,25 @@ fn print_fail(source_file: &Path) {
     println!("{}", source_file.display());
 }
 
-fn validate_error_message(
+fn validate_error_messages(
     command_result: &std::process::Output,
-    error_message: String,
+    error_messages: &[String],
     source_file: &Path,
     tests_failed: &mut usize,
 ) {
     let stderr_string = String::from_utf8_lossy(&command_result.stderr);
-    if stderr_string.contains(&error_message) {
+    if error_messages
+        .iter()
+        .all(|message| stderr_string.contains(message))
+    {
         print_success(source_file);
     } else {
         print_fail(source_file);
         println!("\ttest aborted as expected, but with wrong error message:");
-        println!("\texpected: \"{}\"", error_message);
+        println!("\texpected: \"{}\"", error_messages[0]);
+        for message in &error_messages[1..] {
+            println!("\t          and \"{}\"", &message);
+        }
         println!("\t     got: \"{}\"", stderr_string.trim());
         *tests_failed += 1;
     }
@@ -221,16 +231,23 @@ fn determine_expected_outcome(source_file: &Path) -> Result<TestOutcome, Box<dyn
         if let Some(lhs) = parts.next() {
             if let Some(rhs) = parts.next() {
                 if lhs.trim() == "fails_with" {
-                    let rhs = rhs.trim();
-                    let rhs = rhs
-                        .strip_prefix('"')
-                        .ok_or_else(|| format!("\" prefix not found in {}", source_file.display()))?
-                        .strip_suffix('"')
-                        .ok_or_else(|| {
-                            format!("\" suffix not found in {}", source_file.display())
-                        })?;
+                    let messages = rhs.trim().split(',');
+                    let mut message_vector = Vec::new();
+                    for message in messages {
+                        let message = message.trim();
+                        let message = message
+                            .strip_prefix('"')
+                            .ok_or_else(|| {
+                                format!("\" prefix not found in {}", source_file.display())
+                            })?
+                            .strip_suffix('"')
+                            .ok_or_else(|| {
+                                format!("\" suffix not found in {}", source_file.display())
+                            })?;
+                        message_vector.push(String::from(message));
+                    }
                     return Ok(TestOutcome::Aborted {
-                        error_message: String::from(rhs),
+                        error_messages: message_vector,
                     });
                 }
             }
