@@ -62,7 +62,7 @@ jobs:
 
     - name: Build
       # Build your program with the given configuration
-      run: cmake --build ./build --config ${{env.BUILD_TYPE}}
+      run: cmake --build ./build -j12 --config ${{env.BUILD_TYPE}}
 
     - name: Move Upholsterer2k binary
       shell: bash
@@ -88,7 +88,7 @@ jobs:
 
     - name: Build
       # Build your program with the given configuration
-      run: cmake --build ./build --config ${{env.BUILD_TYPE}}
+      run: cmake --build ./build -j12 --config ${{env.BUILD_TYPE}}
 
     - name: Move Seatbelt binary
       shell: bash
