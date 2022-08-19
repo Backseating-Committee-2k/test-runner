@@ -76,6 +76,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
+            .stderr(Stdio::piped())
             .output()?;
         std::fs::rename(source_file.path().parent().unwrap().join("std"), "std")?;
         match command_result.status.success() {
@@ -245,7 +246,7 @@ fn child_with_pipe(
     let child = Command::new(path_of_executable.as_os_str())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     spawn_child(child, compiler_output)
 }
@@ -262,7 +263,7 @@ where
     let child = Command::new(path_of_executable.as_os_str())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .args(args)
         .spawn()?;
     spawn_child(child, compiler_output)
