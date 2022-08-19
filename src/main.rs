@@ -24,6 +24,11 @@ struct Cli {
     #[clap(short, long, value_parser, default_value = "backseat_safe_system_2k")]
     backseater_path: PathBuf,
 
+    /// The path to the standard library for the Backseat language. The path must specify the
+    /// parent directory of the std-folder.
+    #[clap(short, long, value_parser, default_value = ".")]
+    lib_path: PathBuf,
+
     /// The path of the Backseat-scripts to test. The script files have to start with 'test_' and
     /// end with '.bs' to be tested.
     #[clap(short, long, value_parser, default_value = ".")]
@@ -39,46 +44,25 @@ enum TestOutcome {
 fn main() -> Result<(), Box<dyn Error>> {
     let cli = Cli::parse();
 
-    std::env::set_current_dir(&cli.tests_path)?;
-
-    let _ = Command::new("git")
-        .args([
-            "clone",
-            "--depth",
-            "1",
-            "https://github.com/Backseating-Committee-2k/Seatbelt.git",
-            "git_seatbelt_clone",
-        ])
-        .output()?;
-
-    std::fs::rename("git_seatbelt_clone/std", "std")?;
-
-    std::fs::remove_dir_all("git_seatbelt_clone")?;
-
     let mut tests_run: usize = 0;
     let mut tests_failed: usize = 0;
-    for source_file in globwalk::glob("test*.bs")? {
+    let globwalker = globwalk::GlobWalkerBuilder::new(cli.tests_path.as_path(), "test*.bs")
+        .build()
+        .expect("unable to create glob walker");
+    for source_file in globwalker {
         let source_file = source_file?;
-        std::fs::rename(
-            "std",
-            source_file
-                .path()
-                .parent()
-                .unwrap_or(&PathBuf::from("."))
-                .join("std"),
-        )?;
         let expected_outcome = determine_expected_outcome(source_file.path());
         if let Err(error) = expected_outcome {
-            std::fs::remove_dir_all("std").ok();
             return Err(error);
         }
         let expected_outcome = expected_outcome.unwrap();
 
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
+            .arg("--lib")
+            .arg(cli.lib_path.as_os_str())
             .stderr(Stdio::piped())
             .output()?;
-        std::fs::rename(source_file.path().parent().unwrap().join("std"), "std")?;
         match command_result.status.success() {
             true => {
                 let compiler_output = command_result.stdout;
@@ -168,7 +152,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         ResetColor
     )
     .expect("unable to print output");
-    std::fs::remove_dir_all("std")?;
     if tests_failed == 0 {
         Ok(())
     } else {
