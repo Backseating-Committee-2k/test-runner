@@ -77,6 +77,10 @@ jobs:
         # Repository name with owner. For example, actions/checkout
         repository: Backseating-Committee-2k/Seatbelt
 
+    - name: Move standard library to root directory
+      shell: bash
+      run: mv std ..
+
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
@@ -100,4 +104,4 @@ jobs:
       run: tree ../
 
     - name: Build
-      run: cargo run -- --seatbelt-path ../Seatbelt --upholsterer-path ../Upholsterer2k --backseater-path ../backseat_safe_system_2k
+      run: cargo run -- --seatbelt-path ../Seatbelt --upholsterer-path ../Upholsterer2k --backseater-path ../backseat_safe_system_2k --lib-path ..
