@@ -1,0 +1,9 @@
+// fails_with = "use of undeclared type", "jesus"
+
+function f(a: jesus) ~> U32 {
+    return 42;
+}
+
+function main() ~> Nothing {
+    let x: U32 = f();
+}
