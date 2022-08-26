@@ -4,10 +4,10 @@ function main() ~> Nothing {
 }
 
 namespace space {
-    function f() ~> Nothing {}
+    export function f() ~> Nothing {}
 }
 
 namespace space {
-    function g() ~> Nothing {}
+    export function g() ~> Nothing {}
 }
 
