@@ -26,4 +26,5 @@ function main() {
     let ptr: Function() ~> U32 = f;
     std::assert_equals(value_size(ptr), 4);
     std::assert_equals(value_size(f), 4);
+    std::assert_equals(value_size(@ptr), 4);
 }
