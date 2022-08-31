@@ -15,11 +15,11 @@ function main() {
     std::assert_equals(type_size(Nothing), 0);
     std::assert_equals(value_size(nothing), 0);
 
-    std::assert_equals(type_size(Bool), 4);
-    std::assert_equals(value_size(true), 4);
+    std::assert_equals(type_size(Bool), 1);
+    std::assert_equals(value_size(true), 1);
 
-    std::assert_equals(type_size(Char), 4);
-    std::assert_equals(value_size('x'), 4);
+    std::assert_equals(type_size(Char), 1);
+    std::assert_equals(value_size('x'), 1);
 
     std::assert_equals(value_size(f()), 4);
 
