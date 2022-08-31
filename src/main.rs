@@ -51,6 +51,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("unable to create glob walker");
     for source_file in globwalker {
         let source_file = source_file?;
+        print!("test {} ... ", source_file.path().display());
+        std::io::stdout().flush().expect("unable to flush stdout");
         let expected_outcome = determine_expected_outcome(source_file.path());
         if let Err(error) = expected_outcome {
             return Err(error);
@@ -77,14 +79,14 @@ fn main() -> Result<(), Box<dyn Error>> {
                         match backseater_result.status.success() {
                             true => {
                                 if let TestOutcome::Aborted { error_messages } = expected_outcome {
-                                    print_fail(source_file.path());
+                                    print_fail();
                                     println!("\ttest execution finished, but the following error messages were expected:");
                                     for message in error_messages {
                                         println!("\t\t\"{}\"", message);
                                     }
                                     tests_failed += 1;
                                 } else {
-                                    print_success(source_file.path());
+                                    print_success();
                                 }
                             }
                             false => {
@@ -94,12 +96,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                                     validate_error_messages(
                                         &backseater_result,
                                         error_messages,
-                                        source_file.path(),
                                         &mut tests_failed,
                                     );
                                 } else {
                                     tests_failed += 1;
-                                    print_error(&source_file, backseater_result);
+                                    print_error(backseater_result);
                                 }
                             }
                         }
@@ -109,11 +110,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                             validate_error_messages(
                                 &upholsterer_result,
                                 error_messages,
-                                source_file.path(),
                                 &mut tests_failed,
                             );
                         } else {
-                            print_error(&source_file, upholsterer_result);
+                            print_error(upholsterer_result);
                             tests_failed += 1;
                         }
                     }
@@ -121,14 +121,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             false => {
                 if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
-                    validate_error_messages(
-                        &command_result,
-                        error_messages,
-                        source_file.path(),
-                        &mut tests_failed,
-                    );
+                    validate_error_messages(&command_result, error_messages, &mut tests_failed);
                 } else {
-                    print_error(&source_file, command_result);
+                    print_error(command_result);
                     tests_failed += 1;
                 }
             }
@@ -159,32 +154,29 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn print_success(source_file: &Path) {
+fn print_success() {
     execute!(
         stdout(),
         SetForegroundColor(Color::DarkGreen),
-        Print("TEST SUCCEEDED: "),
+        Print("OK\n"),
         ResetColor
     )
     .expect("unable to print output");
-    println!("{}", source_file.display());
 }
 
-fn print_fail(source_file: &Path) {
+fn print_fail() {
     execute!(
         stdout(),
         SetForegroundColor(Color::DarkRed),
-        Print("TEST FAILED: "),
+        Print("FAILED\n"),
         ResetColor
     )
     .expect("unable to print output");
-    println!("{}", source_file.display());
 }
 
 fn validate_error_messages(
     command_result: &std::process::Output,
     error_messages: &[String],
-    source_file: &Path,
     tests_failed: &mut usize,
 ) {
     let stderr_string = String::from_utf8_lossy(&command_result.stderr);
@@ -192,9 +184,9 @@ fn validate_error_messages(
         .iter()
         .all(|message| stderr_string.contains(message))
     {
-        print_success(source_file);
+        print_success();
     } else {
-        print_fail(source_file);
+        print_fail();
         println!("\ttest aborted as expected, but with wrong error message:");
         println!("\texpected: \"{}\"", error_messages[0]);
         for message in &error_messages[1..] {
@@ -282,8 +274,8 @@ fn spawn_child(
     Ok(child.wait_with_output()?)
 }
 
-fn print_error(source_file: &DirEntry, command_result: std::process::Output) {
-    print_fail(source_file.path());
+fn print_error(command_result: std::process::Output) {
+    print_fail();
     let error_message = String::from_utf8_lossy(&command_result.stderr);
     let error_message = error_message.replace('\n', "\n\t");
     println!("\t{error_message}");
