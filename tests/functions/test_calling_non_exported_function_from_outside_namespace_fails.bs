@@ -1,4 +1,4 @@
-// fails_with = "no matching function overload found"
+// fails_with = "use of undeclared identifier", "g", "maybe you're missing an export"
 
 namespace test {
     function g() ~> Nothing { }
