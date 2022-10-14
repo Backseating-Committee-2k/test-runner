@@ -2,6 +2,6 @@
 
 function main() {
     let n: U32 = 42;
-    let ptr: ->U32 = @n;
-    let ptr2: ->mutable U32 = @n;
+    let ptr: ->U32 = n@;
+    let ptr2: ->mutable U32 = n@;
 }

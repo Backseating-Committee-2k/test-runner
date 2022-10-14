@@ -12,7 +12,7 @@ function main() {
     let functions = [f, g, f, f, f, g];
     let num_functions = value_size(functions) / value_size(functions[0]);
 
-    let begin = @functions[0];
+    let begin = functions[0]@;
     let end = begin + num_functions;
 
     let pointer: mutable = begin;

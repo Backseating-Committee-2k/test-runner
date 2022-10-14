@@ -26,7 +26,7 @@ function main() {
         S { n: 2, b: false },
         S { n: 3, b: true },
     ];
-    let pointer: mutable = @array[0];
+    let pointer: mutable = array[0]@;
     std::assert_equals(pointer!.n, 1);
     std::assert_equals(pointer!.b, true);
 

@@ -10,8 +10,8 @@ function main() {
     let a: mutable = 42;
     a = 10;
     let callable = f;
-    let pointer1 = @callable;
-    let pointer2 = @pointer1;
+    let pointer1 = callable@;
+    let pointer2 = pointer1@;
     std::assert_equals(pointer2!!(a), 20);
     let c = 'x';
     g(c);

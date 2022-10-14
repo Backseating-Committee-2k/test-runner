@@ -92,7 +92,7 @@ function main() {
     std::assert_equals(array[0].n, 42);
 
     let array_copy: mutable = array;
-    change_array_of_structs(@array_copy);
+    change_array_of_structs(array_copy@);
 
     std::assert(not array_copy[0].b);
     std::assert_equals(array_copy[0].c, 'Q');

@@ -23,7 +23,7 @@ function main() {
     ];
 
     let world = World {
-        game_objects: @game_objects,
+        game_objects: game_objects@,
     };
     std::assert_equals(world.game_objects![0].x, 10);
     std::assert_equals(world.game_objects![0].y, 15);
