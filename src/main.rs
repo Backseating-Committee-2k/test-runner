@@ -38,6 +38,7 @@ enum TestOutcome {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    println!("test runner started");
     let cli = Cli::parse();
 
     let mut tests_run: usize = 0;
