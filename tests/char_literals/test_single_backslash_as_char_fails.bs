@@ -1,5 +1,0 @@
-// fails_with = "unexpected input"
-
-function main() ~> Nothing {
-    let c: mutable Char = '\';
-}

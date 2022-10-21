@@ -13,11 +13,11 @@ use globwalk::DirEntry;
 #[clap(author, version, about)]
 struct Cli {
     /// The path to the Seatbelt compiler executable.
-    #[clap(short, long, value_parser, default_value = "Seatbelt")]
+    #[clap(short, long, value_parser, default_value = "./Seatbelt")]
     seatbelt_path: PathBuf,
 
     /// The path to the Backseater virtual machine executable.
-    #[clap(short, long, value_parser, default_value = "backseat_safe_system_2k")]
+    #[clap(short, long, value_parser, default_value = "./backseat_safe_system_2k")]
     backseater_path: PathBuf,
 
     /// The path to the standard library for the Backseat language. The path must specify the

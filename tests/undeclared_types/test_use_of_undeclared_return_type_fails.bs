@@ -1,9 +1,0 @@
-// fails_with = "use of undeclared type", "Jesus"
-
-function f() ~> Jesus {
-    loop {}
-}
-
-function main() ~> Nothing {
-    let x: Jesus = f();
-}
