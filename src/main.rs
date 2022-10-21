@@ -25,8 +25,8 @@ struct Cli {
     #[clap(short, long, value_parser, default_value = ".")]
     lib_path: PathBuf,
 
-    /// The path of the Backseat-scripts to test. The script files have to start with 'test_' and
-    /// end with '.bs' to be tested.
+    /// The path of the Backseat source files to test. The source files have to start with
+    /// 'test_' and end with '.bs' to be tested.
     #[clap(short, long, value_parser, default_value = ".")]
     tests_path: PathBuf,
 }
