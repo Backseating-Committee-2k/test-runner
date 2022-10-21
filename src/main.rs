@@ -16,10 +16,6 @@ struct Cli {
     #[clap(short, long, value_parser, default_value = "Seatbelt")]
     seatbelt_path: PathBuf,
 
-    /// The path to the Upholsterer2k bssembler executable.
-    #[clap(short, long, value_parser, default_value = "Upholsterer2k")]
-    upholsterer_path: PathBuf,
-
     /// The path to the Backseater virtual machine executable.
     #[clap(short, long, value_parser, default_value = "backseat_safe_system_2k")]
     backseater_path: PathBuf,
@@ -53,11 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let source_file = source_file?;
         print!("test {} ... ", source_file.path().display());
         std::io::stdout().flush().expect("unable to flush stdout");
-        let expected_outcome = determine_expected_outcome(source_file.path());
-        if let Err(error) = expected_outcome {
-            return Err(error);
-        }
-        let expected_outcome = expected_outcome.unwrap();
+        let expected_outcome = determine_expected_outcome(source_file.path())?;
 
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
@@ -68,53 +60,34 @@ fn main() -> Result<(), Box<dyn Error>> {
         match command_result.status.success() {
             true => {
                 let compiler_output = command_result.stdout;
-                let upholsterer_result = child_with_pipe(&cli.upholsterer_path, compiler_output)?;
-                match upholsterer_result.status.success() {
+                let backseater_result = child_with_pipe_args(
+                    &cli.backseater_path,
+                    compiler_output,
+                    ["run", "--exit-on-halt"],
+                )?;
+                match backseater_result.status.success() {
                     true => {
-                        let backseater_result = child_with_pipe_args(
-                            &cli.backseater_path,
-                            upholsterer_result.stdout,
-                            ["run", "--exit-on-halt"],
-                        )?;
-                        match backseater_result.status.success() {
-                            true => {
-                                if let TestOutcome::Aborted { error_messages } = expected_outcome {
-                                    print_fail();
-                                    println!("\ttest execution finished, but the following error messages were expected:");
-                                    for message in error_messages {
-                                        println!("\t\t\"{}\"", message);
-                                    }
-                                    tests_failed += 1;
-                                } else {
-                                    print_success();
-                                }
+                        if let TestOutcome::Aborted { error_messages } = expected_outcome {
+                            print_fail();
+                            println!("\ttest execution finished, but the following error messages were expected:");
+                            for message in error_messages {
+                                println!("\t\t\"{}\"", message);
                             }
-                            false => {
-                                if let TestOutcome::Aborted { ref error_messages } =
-                                    expected_outcome
-                                {
-                                    validate_error_messages(
-                                        &backseater_result,
-                                        error_messages,
-                                        &mut tests_failed,
-                                    );
-                                } else {
-                                    tests_failed += 1;
-                                    print_error(backseater_result);
-                                }
-                            }
+                            tests_failed += 1;
+                        } else {
+                            print_success();
                         }
                     }
                     false => {
                         if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
                             validate_error_messages(
-                                &upholsterer_result,
+                                &backseater_result,
                                 error_messages,
                                 &mut tests_failed,
                             );
                         } else {
-                            print_error(upholsterer_result);
                             tests_failed += 1;
+                            print_error(backseater_result);
                         }
                     }
                 }
