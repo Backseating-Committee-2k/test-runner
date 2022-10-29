@@ -3,11 +3,14 @@ use std::ffi::OsStr;
 use std::io::{stdout, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use anyhow::anyhow;
 use clap::Parser;
 use crossterm::execute;
 use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
-use globwalk::DirEntry;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::IntoParallelRefIterator;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -37,20 +40,34 @@ enum TestOutcome {
     Aborted { error_messages: Vec<String> },
 }
 
+struct TestResult {
+    filename: String,
+    kind: TestResultKind,
+}
+
+#[derive(Debug, PartialEq)]
+enum TestResultKind {
+    Success,
+    Failure(String),
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     println!("test runner started");
     let cli = Cli::parse();
 
-    let mut tests_run: usize = 0;
-    let mut tests_failed: usize = 0;
     let globwalker = globwalk::GlobWalkerBuilder::new(cli.tests_path.as_path(), "test*.bs")
         .build()
         .expect("unable to create glob walker");
-    for source_file in globwalker {
-        let source_file = source_file?;
-        print!("test {} ... ", source_file.path().display());
+
+    let source_files: Vec<_> = globwalker.collect::<Result<_, _>>()?;
+
+    let tests_run = AtomicUsize::new(0);
+    let tests_failed = AtomicUsize::new(0);
+
+    source_files.par_iter().map(|source_file| -> anyhow::Result<TestResult> {
         std::io::stdout().flush().expect("unable to flush stdout");
         let expected_outcome = determine_expected_outcome(source_file.path())?;
+        let filename = source_file.path().display().to_string();
 
         let command_result = Command::new(cli.seatbelt_path.as_os_str())
             .arg(&source_file.path().as_os_str())
@@ -69,41 +86,66 @@ fn main() -> Result<(), Box<dyn Error>> {
                 match backseater_result.status.success() {
                     true => {
                         if let TestOutcome::Aborted { error_messages } = expected_outcome {
-                            print_fail();
-                            println!("\ttest execution finished, but the following error messages were expected:");
+                            let mut error_message = "\ttest execution finished, but the following error messages were expected:".to_string();
                             for message in error_messages {
-                                println!("\t\t\"{}\"", message);
+                                error_message += &format!("\t\t\"{}\"", message);
                             }
-                            tests_failed += 1;
+                            Ok(TestResult { filename, kind: TestResultKind::Failure(error_message) })
                         } else {
-                            print_success();
+                            Ok(TestResult{ filename, kind: TestResultKind::Success})
                         }
                     }
                     false => {
                         if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
-                            validate_error_messages(
+                            match validate_error_messages(
                                 &backseater_result,
                                 error_messages,
-                                &mut tests_failed,
-                            );
+                            ) {
+                                Ok(_) => Ok(TestResult { filename, kind: TestResultKind::Success }),
+                                Err(error) => Ok(TestResult { filename, kind: TestResultKind::Failure(error.to_string()) }),
+                            }
                         } else {
-                            tests_failed += 1;
-                            print_error(backseater_result);
+                            Ok(TestResult{filename, kind: TestResultKind::Failure(String::from_utf8(backseater_result.stderr)?)})
                         }
                     }
                 }
             }
             false => {
                 if let TestOutcome::Aborted { ref error_messages } = expected_outcome {
-                    validate_error_messages(&command_result, error_messages, &mut tests_failed);
+                    match validate_error_messages(
+                        &command_result,
+                        error_messages,
+                    ) {
+                        Ok(_) => Ok(TestResult { filename, kind: TestResultKind::Success }),
+                        Err(error) => Ok(TestResult { filename, kind: TestResultKind::Failure(error.to_string()) }),
+                    }
                 } else {
-                    print_error(command_result);
-                    tests_failed += 1;
+                    Ok(TestResult{filename, kind: TestResultKind::Failure(String::from_utf8(command_result.stderr)?)})
                 }
             }
         }
-        tests_run += 1;
-    }
+    }).for_each(|result| {
+        match result {
+            Ok(result) => {
+                tests_run.fetch_add(1, Ordering::SeqCst);
+
+                match result.kind {
+                    TestResultKind::Success => {
+                        print_success(&result.filename);
+                    },
+                    TestResultKind::Failure(error_message) => {
+                        print_fail(&result.filename, &error_message);
+                        tests_failed.fetch_add(1, Ordering::SeqCst);
+                    },
+                }
+            },
+            Err(_) => panic!(),
+        }
+    });
+
+    let tests_run = tests_run.load(Ordering::Relaxed);
+    let tests_failed = tests_failed.load(Ordering::Relaxed);
+
     let message = format!(
         "Tests run: {}, Tests successful: {}, Tests failed: {}\n",
         tests_run,
@@ -128,9 +170,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn print_success() {
+fn print_success(filename: &str) {
     execute!(
         stdout(),
+        Print(format!("test {filename} ... ")),
         SetForegroundColor(Color::DarkGreen),
         Print("OK\n"),
         ResetColor
@@ -138,12 +181,14 @@ fn print_success() {
     .expect("unable to print output");
 }
 
-fn print_fail() {
+fn print_fail(filename: &str, error_message: &str) {
     execute!(
         stdout(),
+        Print(format!("test {filename} ... ")),
         SetForegroundColor(Color::DarkRed),
         Print("FAILED\n"),
-        ResetColor
+        ResetColor,
+        Print(error_message)
     )
     .expect("unable to print output");
 }
@@ -151,27 +196,27 @@ fn print_fail() {
 fn validate_error_messages(
     command_result: &std::process::Output,
     error_messages: &[String],
-    tests_failed: &mut usize,
-) {
+) -> anyhow::Result<()> {
     let stderr_string = String::from_utf8_lossy(&command_result.stderr);
     if error_messages
         .iter()
         .all(|message| stderr_string.contains(message))
     {
-        print_success();
+        Ok(())
     } else {
-        print_fail();
-        println!("\ttest aborted as expected, but with wrong error message:");
-        println!("\texpected: \"{}\"", error_messages[0]);
+        let mut error_message = format!(
+            "\ttest aborted as expected, but with wrong error message:\n\texpected: \"{}\"",
+            error_messages[0]
+        );
         for message in &error_messages[1..] {
-            println!("\t          and \"{}\"", &message);
+            error_message += &format!("\t          and \"{}\"", &message);
         }
-        println!("\t     got: \"{}\"", stderr_string.trim());
-        *tests_failed += 1;
+        error_message += &format!("\t     got: \"{}\"", stderr_string.trim());
+        Err(anyhow!(error_message))
     }
 }
 
-fn determine_expected_outcome(source_file: &Path) -> Result<TestOutcome, Box<dyn Error>> {
+fn determine_expected_outcome(source_file: &Path) -> anyhow::Result<TestOutcome> {
     let input_file = std::fs::read_to_string(source_file.as_os_str())?;
     let first_line = input_file.split('\n').next().unwrap().trim();
     if first_line.starts_with("//") {
@@ -187,11 +232,11 @@ fn determine_expected_outcome(source_file: &Path) -> Result<TestOutcome, Box<dyn
                         let message = message
                             .strip_prefix('"')
                             .ok_or_else(|| {
-                                format!("\" prefix not found in {}", source_file.display())
+                                anyhow!("\" prefix not found in {}", source_file.display())
                             })?
                             .strip_suffix('"')
                             .ok_or_else(|| {
-                                format!("\" suffix not found in {}", source_file.display())
+                                anyhow!("\" suffix not found in {}", source_file.display())
                             })?;
                         message_vector.push(String::from(message));
                     }
@@ -205,23 +250,11 @@ fn determine_expected_outcome(source_file: &Path) -> Result<TestOutcome, Box<dyn
     Ok(TestOutcome::Finished)
 }
 
-fn child_with_pipe(
-    path_of_executable: &Path,
-    compiler_output: Vec<u8>,
-) -> Result<std::process::Output, Box<dyn Error>> {
-    let child = Command::new(path_of_executable.as_os_str())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    spawn_child(child, compiler_output)
-}
-
 fn child_with_pipe_args<S, I>(
     path_of_executable: &Path,
     compiler_output: Vec<u8>,
     args: I,
-) -> Result<std::process::Output, Box<dyn Error>>
+) -> anyhow::Result<std::process::Output>
 where
     S: AsRef<OsStr>,
     I: IntoIterator<Item = S>,
@@ -238,7 +271,7 @@ where
 fn spawn_child(
     mut child: std::process::Child,
     compiler_output: Vec<u8>,
-) -> Result<std::process::Output, Box<dyn Error>> {
+) -> anyhow::Result<std::process::Output> {
     let mut stdin = child.stdin.take().expect("Failed to open stdin");
     std::thread::spawn(move || {
         stdin
@@ -246,11 +279,4 @@ fn spawn_child(
             .expect("Failed to write to stdin");
     });
     Ok(child.wait_with_output()?)
-}
-
-fn print_error(command_result: std::process::Output) {
-    print_fail();
-    let error_message = String::from_utf8_lossy(&command_result.stderr);
-    let error_message = error_message.replace('\n', "\n\t");
-    println!("\t{error_message}");
 }
