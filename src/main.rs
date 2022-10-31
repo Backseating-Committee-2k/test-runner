@@ -172,7 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 fn print_success(filename: &str) {
     execute!(
-        stdout(),
+        stdout().lock(),
         Print(format!("test {filename} ... ")),
         SetForegroundColor(Color::DarkGreen),
         Print("OK\n"),
@@ -183,7 +183,7 @@ fn print_success(filename: &str) {
 
 fn print_fail(filename: &str, error_message: &str) {
     execute!(
-        stdout(),
+        stdout().lock(),
         Print(format!("test {filename} ... ")),
         SetForegroundColor(Color::DarkRed),
         Print("FAILED\n"),
